@@ -77,13 +77,22 @@ public class TdConsumerService : BackgroundService
         }
     }
 
+    private int _rawCount;
+
     private void ProcessMessage(string json)
     {
+        if (Interlocked.Increment(ref _rawCount) <= 3)
+            _logger.LogInformation("TD raw sample: {Json}", json[..Math.Min(500, json.Length)]);
+
         try
         {
             // TD messages are arrays of heterogeneous objects
             var array = JsonNode.Parse(json)?.AsArray();
-            if (array is null) return;
+            if (array is null)
+            {
+                if (_rawCount <= 3) _logger.LogWarning("TD message not a JSON array");
+                return;
+            }
 
             foreach (var item in array)
             {

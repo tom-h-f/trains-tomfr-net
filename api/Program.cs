@@ -31,4 +31,7 @@ app.MapGet("/ws", async (HttpContext ctx, TrainStateService trainState) =>
 
 app.MapGet("/health", () => Results.Ok());
 
+app.MapGet("/debug", (TrainStateService trainState, TrainRegistry registry) =>
+    Results.Ok(registry.GetDebugInfo()));
+
 app.Run();

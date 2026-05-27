@@ -19,13 +19,39 @@ public class TrainRegistry
     private readonly ConcurrentDictionary<string, TrainEntry> _trains = new();
     private readonly TrainStateService _state;
 
+    private int _tdMessages;
+    private int _darwinMessages;
+    private int _berthHits;
+    private int _berthMisses;
+    private string? _lastTdSample;
+    private string? _lastDarwinSample;
+
     public TrainRegistry(TrainStateService state)
     {
         _state = state;
     }
 
+    public object GetDebugInfo() => new
+    {
+        TdMessages = _tdMessages,
+        DarwinMessages = _darwinMessages,
+        BerthHits = _berthHits,
+        BerthMisses = _berthMisses,
+        TrainsWithPosition = _trains.Values.Count(t => t.Lat.HasValue),
+        TrainsTotal = _trains.Count,
+        LastTdSample = _lastTdSample,
+        LastDarwinSample = _lastDarwinSample,
+    };
+
     public void UpdateFromTd(string headcode, TdBerthPosition berth, double? lat, double? lng)
     {
+        Interlocked.Increment(ref _tdMessages);
+        if (lat.HasValue) Interlocked.Increment(ref _berthHits);
+        else Interlocked.Increment(ref _berthMisses);
+
+        if (_tdMessages <= 5)
+            _lastTdSample = $"headcode={headcode} area={berth.AreaId} berth={berth.BerthId} lat={lat} lng={lng}";
+
         var entry = _trains.AddOrUpdate(
             headcode,
             _ => new TrainEntry(headcode, null, null, 0, berth, lat, lng, DateTime.UtcNow),
@@ -38,6 +64,10 @@ public class TrainRegistry
 
     public void UpdateFromDarwin(string headcode, string? toc, string? destination, int delayMinutes)
     {
+        Interlocked.Increment(ref _darwinMessages);
+        if (_darwinMessages <= 3)
+            _lastDarwinSample = $"headcode={headcode} toc={toc} dest={destination} delay={delayMinutes}";
+
         var entry = _trains.AddOrUpdate(
             headcode,
             _ => new TrainEntry(headcode, toc, destination, delayMinutes, null, null, null, DateTime.UtcNow),
