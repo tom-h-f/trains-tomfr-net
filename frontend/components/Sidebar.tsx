@@ -68,7 +68,7 @@ export default function Sidebar({
   );
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" suppressHydrationWarning>
       {/* Header */}
       <div className="sidebar-header">
         <div className="sidebar-title">
@@ -91,10 +91,7 @@ export default function Sidebar({
 
       {/* Filter */}
       <div className="sidebar-search">
-        <svg className="search-icon" viewBox="0 0 16 16" fill="none">
-          <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.2" />
-          <path d="M10 10l3.5 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-        </svg>
+        <span className="search-icon" aria-hidden="true">⌕</span>
         <input
           className="search-input"
           type="text"
@@ -251,10 +248,11 @@ export default function Sidebar({
         }
 
         .search-icon {
-          width: 14px;
-          height: 14px;
+          font-size: 16px;
           color: #374151;
           flex-shrink: 0;
+          line-height: 1;
+          user-select: none;
         }
 
         .search-input {
