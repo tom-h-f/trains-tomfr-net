@@ -8,8 +8,10 @@ public record TrainPosition(
     double Lng,
     string? FromTiploc,
     string? ToTiploc,
+    string? Origin,
     string? Destination,
     int DelayMinutes,
+    double? Heading,
     DateTime UpdatedAt
 );
 

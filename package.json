@@ -1,6 +1,0 @@
-{
-  "dependencies": {},
-  "devDependencies": {
-    "kafkajs": "^2.2.4"
-  }
-}

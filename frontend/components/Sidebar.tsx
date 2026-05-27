@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { TrainPosition } from "@/types/train";
 
 interface Props {
@@ -38,11 +38,11 @@ export default function Sidebar({
     const all = [...trains.values()];
     const filtered = filter
       ? all.filter(
-          (t) =>
-            t.headcode?.toLowerCase().includes(filter.toLowerCase()) ||
-            t.toc?.toLowerCase().includes(filter.toLowerCase()) ||
-            t.destination?.toLowerCase().includes(filter.toLowerCase())
-        )
+        (t) =>
+          t.headcode?.toLowerCase().includes(filter.toLowerCase()) ||
+          t.toc?.toLowerCase().includes(filter.toLowerCase()) ||
+          t.destination?.toLowerCase().includes(filter.toLowerCase())
+      )
       : all;
 
     return filtered.sort((a, b) => {
@@ -57,14 +57,18 @@ export default function Sidebar({
     [trains]
   );
 
+  useEffect(() => {
+    if (!selectedRid) return;
+    document.getElementById(`train-row-${selectedRid}`)?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+    });
+  }, [selectedRid]);
+
   return (
     <aside className="sidebar" suppressHydrationWarning>
       {/* Header */}
       <div className="sidebar-header">
-        <div className="sidebar-title">
-          <span className="title-text">TRAINS</span>
-          <span className={`live-dot ${connected ? "live" : "dead"}`} />
-        </div>
         <div className="sidebar-stats">
           <span className="stat">
             <span className="stat-num">{trains.size}</span>
@@ -115,37 +119,38 @@ export default function Sidebar({
 
       {/* Table */}
       <div className="train-list">
-        <div className="train-list-header">
-          <span>TRAIN</span>
-          <span>DESTINATION</span>
-          <span>STATUS</span>
-        </div>
-
         <div className="train-rows">
           {sorted.length === 0 && (
             <div className="empty-state">
               {connected ? "Waiting for data…" : "Connecting…"}
             </div>
           )}
-          {sorted.map((train) => (
-            <div
-              key={train.rid}
-              className={`train-row ${train.rid === selectedRid ? "selected" : ""} ${
-                train.delayMinutes > 5 ? "row-late" : train.delayMinutes > 0 ? "row-minor" : ""
-              }`}
-              onClick={() => onSelectRid(train.rid === selectedRid ? null : train.rid)}
-            >
-              <span className="train-headcode">{train.headcode ?? train.rid}</span>
-              <span className="train-dest">
-                {train.destination
-                  ? train.destination.length > 18
-                    ? train.destination.slice(0, 17) + "…"
-                    : train.destination
-                  : <span className="no-data">—</span>}
-              </span>
-              <DelayBadge minutes={train.delayMinutes} hasData={!!train.destination || train.delayMinutes !== 0} />
-            </div>
-          ))}
+          {sorted.map((train) => {
+            const hasRoute = train.origin || train.destination;
+            const routeLabel = hasRoute
+              ? [train.origin, train.destination].filter(Boolean).join(" → ")
+              : null;
+            return (
+              <div
+                key={train.rid}
+                id={`train-row-${train.rid}`}
+                className={`train-row ${train.rid === selectedRid ? "selected" : ""} ${train.delayMinutes > 5 ? "row-late" : train.delayMinutes > 0 ? "row-minor" : ""
+                  }`}
+                onClick={() => onSelectRid(train.rid === selectedRid ? null : train.rid)}
+              >
+                <div className="train-name-cell">
+                  <span className="train-route">
+                    {routeLabel ?? <span className="no-data">Unknown route</span>}
+                  </span>
+                  <span className="train-meta">
+                    {train.headcode ?? train.rid}
+                    {train.toc && <span className="train-toc"> · {train.toc}</span>}
+                  </span>
+                </div>
+                <DelayBadge minutes={train.delayMinutes} hasData={!!train.destination || train.delayMinutes !== 0} />
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -154,17 +159,17 @@ export default function Sidebar({
           width: 280px;
           min-width: 280px;
           height: 100vh;
-          background: #0b0f14;
-          border-right: 1px solid #1a2332;
+          background: var(--surface);
+          border-right: 1px solid var(--rule);
           display: flex;
           flex-direction: column;
-          font-family: var(--font-geist-sans), system-ui, sans-serif;
+          font-family: var(--font-mono), 'DM Mono', monospace;
           overflow: hidden;
         }
 
         .sidebar-header {
           padding: 18px 16px 14px;
-          border-bottom: 1px solid #1a2332;
+          border-bottom: 1px solid var(--rule);
           display: flex;
           flex-direction: column;
           gap: 10px;
@@ -177,11 +182,11 @@ export default function Sidebar({
         }
 
         .title-text {
-          font-family: var(--font-geist-mono), monospace;
-          font-size: 11px;
-          font-weight: 600;
-          letter-spacing: 0.2em;
-          color: #f59e0b;
+          font-family: var(--font-display), 'Playfair Display', Georgia, serif;
+          font-size: 18px;
+          font-weight: 700;
+          color: var(--fg);
+          letter-spacing: 0.01em;
         }
 
         .live-dot {
@@ -191,20 +196,19 @@ export default function Sidebar({
           flex-shrink: 0;
         }
         .live-dot.live {
-          background: #4ade80;
-          box-shadow: 0 0 6px #4ade80aa;
+          background: #5a7a52;
           animation: pulse-dot 2s ease-in-out infinite;
         }
-        .live-dot.dead { background: #374151; }
+        .live-dot.dead { background: var(--rule); }
 
         @keyframes pulse-dot {
           0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
+          50% { opacity: 0.35; }
         }
 
         .sidebar-stats {
           display: flex;
-          gap: 16px;
+          gap: 20px;
         }
 
         .stat {
@@ -214,32 +218,33 @@ export default function Sidebar({
         }
 
         .stat-num {
-          font-family: var(--font-geist-mono), monospace;
-          font-size: 22px;
-          font-weight: 600;
-          color: #e2e8f0;
+          font-family: var(--font-mono), monospace;
+          font-size: 20px;
+          font-weight: 500;
+          color: var(--fg);
           line-height: 1;
         }
-        .stat-num.late-num { color: #f87171; }
+        .stat-num.late-num { color: #8b3a3a; }
 
         .stat-label {
-          font-size: 10px;
-          letter-spacing: 0.08em;
-          color: #4b5563;
+          font-size: 9px;
+          letter-spacing: 0.1em;
+          color: var(--muted);
           text-transform: uppercase;
         }
 
         .sidebar-search {
           padding: 10px 12px;
-          border-bottom: 1px solid #1a2332;
+          border-bottom: 1px solid var(--rule);
           display: flex;
           align-items: center;
           gap: 8px;
+          background: var(--bg);
         }
 
         .search-icon {
           font-size: 16px;
-          color: #374151;
+          color: var(--muted);
           flex-shrink: 0;
           line-height: 1;
           user-select: none;
@@ -251,30 +256,31 @@ export default function Sidebar({
           border: none;
           outline: none;
           font-size: 12px;
-          color: #9ca3af;
+          color: var(--fg-2);
           font-family: inherit;
           min-width: 0;
         }
-        .search-input::placeholder { color: #374151; }
-        .search-input:focus { color: #e2e8f0; }
+        .search-input::placeholder { color: var(--rule); }
+        .search-input:focus { color: var(--fg); }
 
         .search-clear {
           background: none;
           border: none;
-          color: #4b5563;
+          color: var(--muted);
           cursor: pointer;
           font-size: 16px;
           padding: 0;
           line-height: 1;
         }
-        .search-clear:hover { color: #9ca3af; }
+        .search-clear:hover { color: var(--fg-2); }
 
         .sort-tabs {
           display: flex;
           align-items: center;
           gap: 0;
           padding: 0 12px;
-          border-bottom: 1px solid #1a2332;
+          border-bottom: 1px solid var(--rule);
+          background: var(--surface);
         }
 
         .sort-tab {
@@ -282,26 +288,26 @@ export default function Sidebar({
           border: none;
           border-bottom: 2px solid transparent;
           padding: 8px 10px;
-          font-size: 11px;
-          font-family: inherit;
-          letter-spacing: 0.06em;
+          font-size: 10px;
+          font-family: var(--font-mono), monospace;
+          letter-spacing: 0.08em;
           text-transform: uppercase;
-          color: #4b5563;
+          color: var(--muted);
           cursor: pointer;
           transition: color 0.15s, border-color 0.15s;
           margin-bottom: -1px;
         }
-        .sort-tab:hover { color: #9ca3af; }
+        .sort-tab:hover { color: var(--fg-2); }
         .sort-tab.active {
-          color: #f59e0b;
-          border-bottom-color: #f59e0b;
+          color: var(--accent);
+          border-bottom-color: var(--accent);
         }
 
         .filter-count {
           margin-left: auto;
           font-size: 10px;
-          color: #4b5563;
-          font-family: var(--font-geist-mono), monospace;
+          color: var(--muted);
+          font-family: var(--font-mono), monospace;
         }
 
         .train-list {
@@ -309,102 +315,101 @@ export default function Sidebar({
           display: flex;
           flex-direction: column;
           overflow: hidden;
-        }
-
-        .train-list-header {
-          display: grid;
-          grid-template-columns: 56px 1fr 68px;
-          gap: 8px;
-          padding: 6px 12px;
-          font-size: 9px;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-          color: #374151;
-          border-bottom: 1px solid #111820;
-          flex-shrink: 0;
+          background: var(--bg);
         }
 
         .train-rows {
           flex: 1;
           overflow-y: auto;
           scrollbar-width: thin;
-          scrollbar-color: #1a2332 transparent;
+          scrollbar-color: var(--rule) transparent;
         }
         .train-rows::-webkit-scrollbar { width: 3px; }
         .train-rows::-webkit-scrollbar-track { background: transparent; }
-        .train-rows::-webkit-scrollbar-thumb { background: #1a2332; border-radius: 2px; }
+        .train-rows::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 2px; }
 
         .empty-state {
           padding: 32px 16px;
           text-align: center;
           font-size: 12px;
-          color: #374151;
+          color: var(--muted);
         }
 
         .train-row {
           display: grid;
-          grid-template-columns: 56px 1fr 68px;
+          grid-template-columns: 1fr auto;
           gap: 8px;
-          padding: 7px 12px;
+          padding: 8px 12px;
           align-items: center;
           cursor: pointer;
-          border-bottom: 1px solid #0d1117;
+          border-bottom: 1px solid var(--surface-dark);
           transition: background 0.1s;
         }
-        .train-row:hover { background: #111820; }
+        .train-row:hover { background: var(--surface); }
         .train-row.selected {
-          background: #111d2c;
-          border-bottom-color: #1a2d4a;
+          background: var(--surface-dark);
+          border-bottom-color: var(--rule);
         }
-        .train-row.row-late { border-left: 2px solid #f8717133; }
-        .train-row.row-minor { border-left: 2px solid #fbbf2433; }
+        .train-row.row-late { border-left: 2px solid #8b3a3a55; }
+        .train-row.row-minor { border-left: 2px solid #b8932d55; }
 
-        .train-headcode {
-          font-family: var(--font-geist-mono), monospace;
-          font-size: 13px;
-          font-weight: 600;
-          color: #f59e0b;
-          letter-spacing: 0.03em;
+        .train-name-cell {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          min-width: 0;
         }
-        .train-row.selected .train-headcode { color: #fcd34d; }
 
-        .train-dest {
+        .train-route {
           font-size: 12px;
-          color: #6b7280;
+          color: var(--fg-2);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
-        .train-row:hover .train-dest,
-        .train-row.selected .train-dest { color: #9ca3af; }
+        .train-row:hover .train-route,
+        .train-row.selected .train-route { color: var(--fg); }
 
-        .no-data { color: #1f2937; }
+        .train-meta {
+          font-family: var(--font-mono), monospace;
+          font-size: 10px;
+          color: var(--accent);
+          letter-spacing: 0.04em;
+        }
+        .train-row.selected .train-meta { color: var(--bark); }
+
+        .train-toc {
+          color: var(--muted);
+          font-weight: 300;
+        }
+
+        .no-data { color: var(--rule); }
 
         .delay-badge {
-          font-family: var(--font-geist-mono), monospace;
+          font-family: var(--font-mono), monospace;
           font-size: 10px;
-          font-weight: 600;
-          letter-spacing: 0.04em;
-          padding: 2px 6px;
-          border-radius: 3px;
+          font-weight: 500;
+          letter-spacing: 0.03em;
+          padding: 2px 5px;
+          border-radius: 2px;
           white-space: nowrap;
           justify-self: end;
         }
         .delay-unknown {
           background: transparent;
-          color: #1f2937;
+          color: var(--rule);
         }
         .delay-ontme {
-          background: #052e16;
-          color: #4ade80;
+          background: #e8f0e6;
+          color: #3d6636;
         }
         .delay-minor {
-          background: #1c1403;
-          color: #fbbf24;
+          background: #f7f0de;
+          color: var(--accent);
         }
         .delay-late {
-          background: #1f0606;
-          color: #f87171;
+          background: #f5e6e6;
+          color: #8b3a3a;
         }
       `}</style>
     </aside>

@@ -6,8 +6,10 @@ export interface TrainPosition {
   lng: number;
   fromTiploc: string | null;
   toTiploc: string | null;
+  origin: string | null;
   destination: string | null;
   delayMinutes: number;
+  heading: number | null;
   updatedAt: string;
 }
 

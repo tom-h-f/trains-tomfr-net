@@ -9,20 +9,19 @@ public class TrainRegistry
         string Rid,
         string? Headcode,
         string? Toc,
+        string? Origin,
         string? Destination,
         int DelayMinutes,
         TdBerthPosition? Berth,
         double? Lat,
         double? Lng,
+        double? DestLat,
+        double? DestLng,
         DateTime UpdatedAt
     );
 
-    // Keyed by rid (Darwin) - TD headcodes are mapped via _headcodeToRid
     private readonly ConcurrentDictionary<string, TrainEntry> _trains = new();
-
-    // TD headcode -> rid, populated when Darwin schedule arrives first
     private readonly ConcurrentDictionary<string, string> _headcodeToRid = new();
-
     private readonly TrainStateService _state;
 
     private int _tdMessages;
@@ -58,12 +57,11 @@ public class TrainRegistry
         if (_tdMessages <= 5)
             _lastTdSample = $"headcode={headcode} area={berth.AreaId} berth={berth.BerthId} lat={lat} lng={lng}";
 
-        // Try to resolve headcode -> rid
         var rid = _headcodeToRid.TryGetValue(headcode, out var r) ? r : headcode;
 
         var entry = _trains.AddOrUpdate(
             rid,
-            _ => new TrainEntry(rid, headcode, null, null, 0, berth, lat, lng, DateTime.UtcNow),
+            _ => new TrainEntry(rid, headcode, null, null, null, 0, berth, lat, lng, null, null, DateTime.UtcNow),
             (_, existing) => existing with { Headcode = headcode, Berth = berth, Lat = lat, Lng = lng, UpdatedAt = DateTime.UtcNow }
         );
 
@@ -71,24 +69,28 @@ public class TrainRegistry
             PublishPosition(rid, entry);
     }
 
-    public void UpdateFromDarwin(string rid, string? headcode, string? toc, string? destination, int delayMinutes)
+    public void UpdateFromDarwin(string rid, string? headcode, string? toc, string? origin, string? destination, int delayMinutes,
+        double? destLat = null, double? destLng = null)
     {
         Interlocked.Increment(ref _darwinMessages);
         if (_darwinMessages <= 5)
-            _lastDarwinSample = $"rid={rid} headcode={headcode} toc={toc} dest={destination} delay={delayMinutes}";
+            _lastDarwinSample = $"rid={rid} headcode={headcode} toc={toc} origin={origin} dest={destination} delay={delayMinutes}";
 
         if (headcode is not null)
             _headcodeToRid[headcode] = rid;
 
         var entry = _trains.AddOrUpdate(
             rid,
-            _ => new TrainEntry(rid, headcode, toc, destination, delayMinutes, null, null, null, DateTime.UtcNow),
+            _ => new TrainEntry(rid, headcode, toc, origin, destination, delayMinutes, null, null, null, destLat, destLng, DateTime.UtcNow),
             (_, existing) => existing with
             {
                 Headcode = headcode ?? existing.Headcode,
                 Toc = toc ?? existing.Toc,
+                Origin = origin ?? existing.Origin,
                 Destination = destination ?? existing.Destination,
                 DelayMinutes = delayMinutes,
+                DestLat = destLat ?? existing.DestLat,
+                DestLng = destLng ?? existing.DestLng,
             }
         );
 
@@ -113,6 +115,10 @@ public class TrainRegistry
     {
         if (!entry.Lat.HasValue || !entry.Lng.HasValue) return;
 
+        double? heading = null;
+        if (entry.DestLat.HasValue && entry.DestLng.HasValue)
+            heading = BearingDeg(entry.Lat.Value, entry.Lng.Value, entry.DestLat.Value, entry.DestLng.Value);
+
         var position = new TrainPosition(
             rid,
             entry.Headcode ?? rid,
@@ -121,11 +127,23 @@ public class TrainRegistry
             entry.Lng.Value,
             entry.Berth?.AreaId,
             entry.Berth?.BerthId,
+            entry.Origin,
             entry.Destination,
             entry.DelayMinutes,
+            heading,
             entry.UpdatedAt
         );
 
         _state.UpdateTrain(position);
+    }
+
+    private static double BearingDeg(double lat1, double lng1, double lat2, double lng2)
+    {
+        var dLng = (lng2 - lng1) * Math.PI / 180;
+        var φ1 = lat1 * Math.PI / 180;
+        var φ2 = lat2 * Math.PI / 180;
+        var y = Math.Sin(dLng) * Math.Cos(φ2);
+        var x = Math.Cos(φ1) * Math.Sin(φ2) - Math.Sin(φ1) * Math.Cos(φ2) * Math.Cos(dLng);
+        return (Math.Atan2(y, x) * 180 / Math.PI + 360) % 360;
     }
 }

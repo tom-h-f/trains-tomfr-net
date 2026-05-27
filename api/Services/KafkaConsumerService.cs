@@ -122,10 +122,14 @@ public class KafkaConsumerService : BackgroundService
         if (s.TrainId is not null)
             _ridToHeadcode[s.Rid] = s.TrainId;
 
-        var destTiploc = DestinationTiploc(s);
-        var destName = destTiploc is not null ? _tiplocs.Get(destTiploc)?.Name : null;
+        var originTiploc = OriginTiploc(s);
+        var originName = originTiploc is not null ? _tiplocs.Get(originTiploc)?.Name : null;
 
-        _registry.UpdateFromDarwin(s.Rid, s.TrainId, s.Toc, destName, 0);
+        var destTiploc = DestinationTiploc(s);
+        var destLoc = destTiploc is not null ? _tiplocs.Get(destTiploc) : null;
+
+        _registry.UpdateFromDarwin(s.Rid, s.TrainId, s.Toc, originName, destLoc?.Name, 0,
+            destLoc?.Lat, destLoc?.Lng);
     }
 
     private void ProcessTrainStatus(TrainStatus ts)
@@ -145,7 +149,7 @@ public class KafkaConsumerService : BackgroundService
             ?? locations.Last().Tiploc;
         var destName = _tiplocs.Get(destTiploc)?.Name;
 
-        _registry.UpdateFromDarwin(ts.Rid, headcode, toc: null, destName, delay);
+        _registry.UpdateFromDarwin(ts.Rid, headcode, toc: null, origin: null, destName, delay);
     }
 
     private static int CalculateDelay(List<LocationStatus> locations)
@@ -162,17 +166,36 @@ public class KafkaConsumerService : BackgroundService
         return 0;
     }
 
+    private static string? OriginTiploc(Schedule s)
+    {
+        if (s.Origin.HasValue)
+        {
+            var tiploc = Unwrap<ScheduleLocation>(s.Origin.Value)
+                .Select(l => l.Tiploc).FirstOrDefault(t => t is not null);
+            if (tiploc is not null) return tiploc;
+        }
+        if (s.OpOrigin.HasValue)
+        {
+            var tiploc = Unwrap<ScheduleLocation>(s.OpOrigin.Value)
+                .Select(l => l.Tiploc).FirstOrDefault(t => t is not null);
+            if (tiploc is not null) return tiploc;
+        }
+        return null;
+    }
+
     private static string? DestinationTiploc(Schedule s)
     {
         if (s.Destination.HasValue)
         {
-            var loc = s.Destination.Value.Deserialize<ScheduleLocation>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            if (loc?.Tiploc is not null) return loc.Tiploc;
+            var tiploc = Unwrap<ScheduleLocation>(s.Destination.Value)
+                .Select(l => l.Tiploc).FirstOrDefault(t => t is not null);
+            if (tiploc is not null) return tiploc;
         }
         if (s.OpDestination.HasValue)
         {
-            var loc = s.OpDestination.Value.Deserialize<ScheduleLocation>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            if (loc?.Tiploc is not null) return loc.Tiploc;
+            var tiploc = Unwrap<ScheduleLocation>(s.OpDestination.Value)
+                .Select(l => l.Tiploc).FirstOrDefault(t => t is not null);
+            if (tiploc is not null) return tiploc;
         }
         return null;
     }
