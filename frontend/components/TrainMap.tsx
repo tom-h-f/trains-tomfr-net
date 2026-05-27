@@ -3,16 +3,23 @@
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { useTrains } from "@/hooks/useTrains";
-import FilterPanel from "./FilterPanel";
+import Sidebar from "./Sidebar";
 
 const Map = dynamic(() => import("./Map"), {
   ssr: false,
-  loading: () => <div className="h-full w-full bg-gray-100 flex items-center justify-center text-gray-400 text-sm">Loading map...</div>,
+  loading: () => (
+    <div style={{ flex: 1, background: "#0d1117", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <span style={{ fontFamily: "monospace", fontSize: 12, color: "#374151", letterSpacing: "0.1em" }}>
+        LOADING MAP…
+      </span>
+    </div>
+  ),
 });
 
 export default function TrainMap() {
   const { trains, connected } = useTrains();
   const [filter, setFilter] = useState("");
+  const [selectedRid, setSelectedRid] = useState<string | null>(null);
 
   const visibleTrains = filter
     ? [...trains.values()].filter(
@@ -24,16 +31,22 @@ export default function TrainMap() {
     : [...trains.values()];
 
   return (
-    <div className="relative h-screen w-screen">
-      <Map trains={visibleTrains} />
-
-      <FilterPanel
+    <div style={{ display: "flex", height: "100vh", width: "100vw", overflow: "hidden" }}>
+      <Sidebar
+        trains={trains}
+        connected={connected}
         filter={filter}
         onFilterChange={setFilter}
-        trainCount={visibleTrains.length}
-        totalCount={trains.size}
-        connected={connected}
+        selectedRid={selectedRid}
+        onSelectRid={setSelectedRid}
       />
+      <div style={{ flex: 1, position: "relative" }}>
+        <Map
+          trains={visibleTrains}
+          selectedRid={selectedRid}
+          onSelectTrain={setSelectedRid}
+        />
+      </div>
     </div>
   );
 }
