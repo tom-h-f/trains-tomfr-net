@@ -59,7 +59,7 @@ public class TdConsumerService : BackgroundService
             {
                 try
                 {
-                    var result = consumer.Consume(stoppingToken);
+                    var result = consumer.Consume(TimeSpan.FromMilliseconds(300));
                     if (result?.Message?.Value is null) continue;
                     ProcessMessage(result.Message.Value);
                 }

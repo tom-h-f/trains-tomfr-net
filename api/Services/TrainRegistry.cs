@@ -6,7 +6,8 @@ namespace Api.Services;
 public class TrainRegistry
 {
     private record TrainEntry(
-        string Headcode,
+        string Rid,
+        string? Headcode,
         string? Toc,
         string? Destination,
         int DelayMinutes,
@@ -16,7 +17,12 @@ public class TrainRegistry
         DateTime UpdatedAt
     );
 
+    // Keyed by rid (Darwin) - TD headcodes are mapped via _headcodeToRid
     private readonly ConcurrentDictionary<string, TrainEntry> _trains = new();
+
+    // TD headcode -> rid, populated when Darwin schedule arrives first
+    private readonly ConcurrentDictionary<string, string> _headcodeToRid = new();
+
     private readonly TrainStateService _state;
 
     private int _tdMessages;
@@ -52,45 +58,64 @@ public class TrainRegistry
         if (_tdMessages <= 5)
             _lastTdSample = $"headcode={headcode} area={berth.AreaId} berth={berth.BerthId} lat={lat} lng={lng}";
 
+        // Try to resolve headcode -> rid
+        var rid = _headcodeToRid.TryGetValue(headcode, out var r) ? r : headcode;
+
         var entry = _trains.AddOrUpdate(
-            headcode,
-            _ => new TrainEntry(headcode, null, null, 0, berth, lat, lng, DateTime.UtcNow),
-            (_, existing) => existing with { Berth = berth, Lat = lat, Lng = lng, UpdatedAt = DateTime.UtcNow }
+            rid,
+            _ => new TrainEntry(rid, headcode, null, null, 0, berth, lat, lng, DateTime.UtcNow),
+            (_, existing) => existing with { Headcode = headcode, Berth = berth, Lat = lat, Lng = lng, UpdatedAt = DateTime.UtcNow }
         );
 
         if (lat.HasValue && lng.HasValue)
-            PublishPosition(headcode, entry);
+            PublishPosition(rid, entry);
     }
 
-    public void UpdateFromDarwin(string headcode, string? toc, string? destination, int delayMinutes)
+    public void UpdateFromDarwin(string rid, string? headcode, string? toc, string? destination, int delayMinutes)
     {
         Interlocked.Increment(ref _darwinMessages);
-        if (_darwinMessages <= 3)
-            _lastDarwinSample = $"headcode={headcode} toc={toc} dest={destination} delay={delayMinutes}";
+        if (_darwinMessages <= 5)
+            _lastDarwinSample = $"rid={rid} headcode={headcode} toc={toc} dest={destination} delay={delayMinutes}";
+
+        if (headcode is not null)
+            _headcodeToRid[headcode] = rid;
 
         var entry = _trains.AddOrUpdate(
-            headcode,
-            _ => new TrainEntry(headcode, toc, destination, delayMinutes, null, null, null, DateTime.UtcNow),
-            (_, existing) => existing with { Toc = toc, Destination = destination, DelayMinutes = delayMinutes }
+            rid,
+            _ => new TrainEntry(rid, headcode, toc, destination, delayMinutes, null, null, null, DateTime.UtcNow),
+            (_, existing) => existing with
+            {
+                Headcode = headcode ?? existing.Headcode,
+                Toc = toc ?? existing.Toc,
+                Destination = destination ?? existing.Destination,
+                DelayMinutes = delayMinutes,
+            }
         );
 
         if (entry.Lat.HasValue && entry.Lng.HasValue)
-            PublishPosition(headcode, entry);
+            PublishPosition(rid, entry);
     }
 
     public void RemoveFromTd(string headcode)
     {
-        if (_trains.TryRemove(headcode, out _))
-            _state.RemoveTrain(headcode);
+        var rid = _headcodeToRid.TryGetValue(headcode, out var r) ? r : headcode;
+        if (_trains.TryRemove(rid, out _))
+            _state.RemoveTrain(rid);
     }
 
-    private void PublishPosition(string headcode, TrainEntry entry)
+    public void RemoveByRid(string rid)
+    {
+        if (_trains.TryRemove(rid, out _))
+            _state.RemoveTrain(rid);
+    }
+
+    private void PublishPosition(string rid, TrainEntry entry)
     {
         if (!entry.Lat.HasValue || !entry.Lng.HasValue) return;
 
         var position = new TrainPosition(
-            headcode,
-            headcode,
+            rid,
+            entry.Headcode ?? rid,
             entry.Toc,
             entry.Lat.Value,
             entry.Lng.Value,

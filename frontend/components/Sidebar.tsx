@@ -14,24 +14,14 @@ interface Props {
 
 type SortKey = "headcode" | "delay" | "destination";
 
-function DelayBadge({ minutes }: { minutes: number }) {
+function DelayBadge({ minutes, hasData }: { minutes: number; hasData: boolean }) {
+  if (!hasData)
+    return <span className="delay-badge delay-unknown">—</span>;
   if (minutes <= 0)
-    return (
-      <span className="delay-badge delay-ontme">
-        ON TIME
-      </span>
-    );
+    return <span className="delay-badge delay-ontme">ON TIME</span>;
   if (minutes <= 5)
-    return (
-      <span className="delay-badge delay-minor">
-        +{minutes}
-      </span>
-    );
-  return (
-    <span className="delay-badge delay-late">
-      +{minutes}
-    </span>
-  );
+    return <span className="delay-badge delay-minor">+{minutes} min</span>;
+  return <span className="delay-badge delay-late">+{minutes} min</span>;
 }
 
 export default function Sidebar({
@@ -153,7 +143,7 @@ export default function Sidebar({
                     : train.destination
                   : <span className="no-data">—</span>}
               </span>
-              <DelayBadge minutes={train.delayMinutes} />
+              <DelayBadge minutes={train.delayMinutes} hasData={!!train.destination || train.delayMinutes !== 0} />
             </div>
           ))}
         </div>
@@ -399,6 +389,10 @@ export default function Sidebar({
           border-radius: 3px;
           white-space: nowrap;
           justify-self: end;
+        }
+        .delay-unknown {
+          background: transparent;
+          color: #1f2937;
         }
         .delay-ontme {
           background: #052e16;
