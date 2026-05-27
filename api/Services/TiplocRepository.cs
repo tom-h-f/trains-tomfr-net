@@ -14,7 +14,8 @@ public class TiplocRepository
         if (File.Exists(path))
         {
             var json = File.ReadAllText(path);
-            _locations = JsonSerializer.Deserialize<Dictionary<string, TiplocLocation>>(json)
+            _locations = JsonSerializer.Deserialize<Dictionary<string, TiplocLocation>>(json,
+                             new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
                          ?? new Dictionary<string, TiplocLocation>();
         }
         else

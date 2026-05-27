@@ -15,7 +15,8 @@ public class BerthRepository
         if (File.Exists(path))
         {
             var json = File.ReadAllText(path);
-            _berths = JsonSerializer.Deserialize<Dictionary<string, BerthLocation>>(json)
+            _berths = JsonSerializer.Deserialize<Dictionary<string, BerthLocation>>(json,
+                          new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
                       ?? new Dictionary<string, BerthLocation>();
         }
         else
