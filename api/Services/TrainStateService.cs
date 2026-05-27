@@ -46,11 +46,17 @@ public class TrainStateService
                     break;
             }
         }
+        catch (WebSocketException) { }
+        catch (OperationCanceledException) { }
         finally
         {
             _clients.TryRemove(clientId, out _);
-            if (ws.State == WebSocketState.Open)
-                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+            try
+            {
+                if (ws.State == WebSocketState.Open)
+                    await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+            }
+            catch (WebSocketException) { }
         }
     }
 
