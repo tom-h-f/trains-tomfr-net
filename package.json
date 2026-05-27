@@ -5,6 +5,10 @@
   "scripts": {
     "dev": "bun server.ts",
     "build": "next build",
+    "build:cf": "opennextjs-cloudflare build",
+    "deploy:hub": "cd worker && wrangler deploy",
+    "deploy:ui": "opennextjs-cloudflare build && wrangler deploy",
+    "bridge": "bun scripts/bridge.ts",
     "start": "NODE_ENV=production bun server.ts",
     "lint": "eslint"
   },
@@ -19,6 +23,8 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260527.1",
+    "@opennextjs/cloudflare": "^1.19.11",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -27,14 +33,17 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.95.0"
   },
   "ignoreScripts": [
     "sharp",
     "unrs-resolver"
   ],
   "trustedDependencies": [
+    "esbuild",
     "sharp",
-    "unrs-resolver"
+    "unrs-resolver",
+    "workerd"
   ]
 }

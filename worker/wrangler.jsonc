@@ -1,0 +1,10 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "trains-hub",
+  "main": "index.ts",
+  "compatibility_date": "2026-05-01",
+  "durable_objects": {
+    "bindings": [{ "name": "TRAIN_HUB", "class_name": "TrainHub" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TrainHub"] }]
+}
