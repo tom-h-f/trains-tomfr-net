@@ -1,6 +1,8 @@
 // Fetches tiploc->lat/lng from Overpass API (OSM) using railway=station + ref:tiploc tag.
 // Run: bun run scripts/fetch-tiplocs.ts
 
+export {}
+
 const OVERPASS_URL = "https://overpass.kumi.systems/api/interpreter";
 
 const query = `

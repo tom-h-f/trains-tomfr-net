@@ -10,5 +10,11 @@
   },
   "services": [
     { "binding": "TRAINS_HUB", "service": "trains-hub" }
+  ],
+  "vars": {
+    "NEXT_PUBLIC_WS_URL": "wss://trains-hub.canthus.workers.dev/ws"
+  },
+  "routes": [
+    { "pattern": "trains.tomfr.net/*", "custom_domain": true }
   ]
 }
