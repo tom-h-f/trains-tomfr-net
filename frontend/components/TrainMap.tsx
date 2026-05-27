@@ -30,6 +30,8 @@ export default function TrainMap() {
       )
     : [...trains.values()];
 
+  const selectedTrain = selectedRid ? (trains.get(selectedRid) ?? null) : null;
+
   return (
     <div style={{ display: "flex", height: "100vh", width: "100vw", overflow: "hidden" }}>
       <Sidebar
@@ -43,7 +45,7 @@ export default function TrainMap() {
       <div style={{ flex: 1, position: "relative" }}>
         <Map
           trains={visibleTrains}
-          selectedRid={selectedRid}
+          selectedTrain={selectedTrain}
           onSelectTrain={setSelectedRid}
         />
       </div>

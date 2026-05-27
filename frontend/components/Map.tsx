@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { MapContainer, TileLayer, CircleMarker, Tooltip, useMapEvents } from "react-leaflet";
+import { useEffect, useRef, useState } from "react";
+import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import type { TrainPosition } from "@/types/train";
 
 interface Props {
   trains: TrainPosition[];
+  selectedTrain: TrainPosition | null;
   onSelectTrain?: (rid: string | null) => void;
-  selectedRid?: string | null;
 }
 
 function delayColor(delay: number): string {
@@ -22,11 +22,49 @@ function ZoomWatcher({ onChange }: { onChange: (z: number) => void }) {
 }
 
 function radiusForZoom(zoom: number): number {
-  // Scale smoothly: small dots at overview, larger at street level
   return Math.max(3, Math.min(14, (zoom - 3) * 1.4));
 }
 
-export default function Map({ trains, onSelectTrain, selectedRid }: Props) {
+function TrainFollower({ train }: { train: TrainPosition | null }) {
+  const map = useMap();
+  const prevRidRef = useRef<string | null>(null);
+  const prevLatRef = useRef<number | null>(null);
+  const prevLngRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!train) {
+      prevRidRef.current = null;
+      prevLatRef.current = null;
+      prevLngRef.current = null;
+      return;
+    }
+
+    const isNewSelection = train.rid !== prevRidRef.current;
+    const hasMoved =
+      train.lat !== prevLatRef.current || train.lng !== prevLngRef.current;
+
+    prevRidRef.current = train.rid;
+    prevLatRef.current = train.lat;
+    prevLngRef.current = train.lng;
+
+    if (isNewSelection) {
+      map.flyTo([train.lat, train.lng], Math.max(map.getZoom(), 12), {
+        duration: 1.4,
+        easeLinearity: 0.2,
+      });
+    } else if (hasMoved) {
+      map.flyTo([train.lat, train.lng], map.getZoom(), {
+        duration: 0.6,
+        easeLinearity: 0.5,
+        noMoveStart: true,
+      });
+    }
+  }, [train, map]);
+
+  return null;
+}
+
+export default function Map({ trains, selectedTrain, onSelectTrain }: Props) {
   const [zoom, setZoom] = useState(6);
   const radius = radiusForZoom(zoom);
 
@@ -38,6 +76,7 @@ export default function Map({ trains, onSelectTrain, selectedRid }: Props) {
       zoomControl={true}
     >
       <ZoomWatcher onChange={setZoom} />
+      <TrainFollower train={selectedTrain} />
 
       <TileLayer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -47,7 +86,7 @@ export default function Map({ trains, onSelectTrain, selectedRid }: Props) {
 
       {trains.map((train) => {
         const color = delayColor(train.delayMinutes);
-        const isSelected = train.rid === selectedRid;
+        const isSelected = train.rid === selectedTrain?.rid;
         return (
           <CircleMarker
             key={train.rid}
