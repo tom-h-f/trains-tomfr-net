@@ -7,7 +7,7 @@
     "build": "next build",
     "build:cf": "opennextjs-cloudflare build",
     "deploy:hub": "cd worker && wrangler deploy",
-    "deploy:ui": "opennextjs-cloudflare build && wrangler deploy",
+    "deploy:ui": "NEXT_PUBLIC_API_WS_URL=wss://trains-hub.canthus.workers.dev/ws opennextjs-cloudflare build && wrangler deploy",
     "bridge": "bun scripts/bridge.ts",
     "start": "NODE_ENV=production bun server.ts",
     "lint": "eslint"
