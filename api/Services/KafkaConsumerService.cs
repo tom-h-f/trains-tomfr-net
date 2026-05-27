@@ -78,8 +78,13 @@ public class KafkaConsumerService : BackgroundService
         }
     }
 
+    private int _rawCount;
+
     private void ProcessMessage(string json)
     {
+        if (Interlocked.Increment(ref _rawCount) <= 3)
+            _logger.LogInformation("Darwin raw sample: {Json}", json[..Math.Min(800, json.Length)]);
+
         try
         {
             var msg = JsonSerializer.Deserialize<DarwinMessage>(json);
@@ -96,7 +101,7 @@ public class KafkaConsumerService : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Failed to parse Darwin message");
+            _logger.LogWarning(ex, "Failed to parse Darwin message");
         }
     }
 

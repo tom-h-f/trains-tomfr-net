@@ -5,7 +5,10 @@ import { useState } from "react";
 import { useTrains } from "@/hooks/useTrains";
 import FilterPanel from "./FilterPanel";
 
-const Map = dynamic(() => import("./Map"), { ssr: false });
+const Map = dynamic(() => import("./Map"), {
+  ssr: false,
+  loading: () => <div className="h-full w-full bg-gray-100 flex items-center justify-center text-gray-400 text-sm">Loading map...</div>,
+});
 
 export default function TrainMap() {
   const { trains, connected } = useTrains();

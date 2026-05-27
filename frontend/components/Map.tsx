@@ -2,7 +2,6 @@
 
 import { MapContainer, TileLayer, CircleMarker, Tooltip } from "react-leaflet";
 import type { TrainPosition } from "@/types/train";
-import "leaflet/dist/leaflet.css";
 
 interface Props {
   trains: TrainPosition[];
@@ -32,7 +31,7 @@ export default function Map({ trains }: Props) {
         <CircleMarker
           key={train.rid}
           center={[train.lat, train.lng]}
-          radius={5}
+          radius={7}
           pathOptions={{
             color: delayColor(train.delayMinutes),
             fillColor: delayColor(train.delayMinutes),
