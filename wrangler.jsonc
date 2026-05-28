@@ -11,6 +11,12 @@
   "services": [
     { "binding": "TRAINS_HUB", "service": "trains-hub" }
   ],
+  "kv_namespaces": [
+    {
+      "binding": "TRAINS_KV",
+      "id": "d040854d0cf34c4ba60a5e55e09f58dc"
+    }
+  ],
   "vars": {
     "NEXT_PUBLIC_API_WS_URL": "wss://trains-hub.canthus.workers.dev/ws"
   },

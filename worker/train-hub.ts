@@ -4,6 +4,7 @@ import type { TrainPosition } from '../types/train'
 export interface Env {
   TRAIN_HUB: DurableObjectNamespace<TrainHub>
   INGEST_SECRET: string
+  TRAINS_KV: KVNamespace
 }
 
 interface IngestBody {
@@ -24,6 +25,12 @@ export class TrainHub extends DurableObject<Env> {
           updated_at INTEGER NOT NULL
         )
       `)
+      this.ctx.storage.sql.exec(`
+        CREATE TABLE IF NOT EXISTS removes (
+          rid TEXT PRIMARY KEY,
+          removed_at INTEGER NOT NULL
+        )
+      `)
       const rows = this.ctx.storage.sql
         .exec<{ rid: string; data: string }>('SELECT rid, data FROM trains')
         .toArray()
@@ -41,7 +48,11 @@ export class TrainHub extends DurableObject<Env> {
       const [client, server] = Object.values(pair) as [WebSocket, WebSocket]
       this.ctx.acceptWebSocket(server)
       server.send(
-        JSON.stringify({ type: 'snapshot', trains: Array.from(this.trains.values()) })
+        JSON.stringify({
+          type: 'snapshot',
+          trains: Array.from(this.trains.values()),
+          removes: this.getRemoves(),
+        })
       )
       return new Response(null, { status: 101, webSocket: client })
     }
@@ -64,6 +75,11 @@ export class TrainHub extends DurableObject<Env> {
       for (const rid of body.removes ?? []) {
         this.trains.delete(rid)
         this.ctx.storage.sql.exec('DELETE FROM trains WHERE rid = ?', rid)
+        this.ctx.storage.sql.exec(
+          'INSERT OR REPLACE INTO removes (rid, removed_at) VALUES (?, ?)',
+          rid,
+          Date.now()
+        )
         this.broadcast({ type: 'remove', rid })
       }
       return new Response(null, { status: 204 })
@@ -73,7 +89,33 @@ export class TrainHub extends DurableObject<Env> {
       return Response.json({
         trainCount: this.trains.size,
         trains: Array.from(this.trains.values()),
+        removes: this.getRemoves(),
       })
+    }
+
+    if (url.pathname === '/cron') {
+      const activeTrains = Array.from(this.trains.values())
+      try {
+        await this.env.TRAINS_KV.put('snapshot:hourly', JSON.stringify(activeTrains))
+      } catch (err) {
+        console.error('Failed to write snapshot to KV:', err)
+        return new Response('Failed to write KV', { status: 500 })
+      }
+
+      this.ctx.storage.sql.exec('DELETE FROM removes')
+
+      const oneHourAgo = Date.now() - 60 * 60 * 1000
+      this.ctx.storage.sql.exec('DELETE FROM trains WHERE updated_at < ?', oneHourAgo)
+
+      this.trains.clear()
+      const rows = this.ctx.storage.sql
+        .exec<{ rid: string; data: string }>('SELECT rid, data FROM trains')
+        .toArray()
+      for (const row of rows) {
+        this.trains.set(row.rid, JSON.parse(row.data))
+      }
+
+      return new Response('OK', { status: 200 })
     }
 
     return new Response('Not found', { status: 404 })
@@ -83,6 +125,17 @@ export class TrainHub extends DurableObject<Env> {
 
   webSocketClose(ws: WebSocket) {
     ws.close()
+  }
+
+  private getRemoves(): string[] {
+    try {
+      const rows = this.ctx.storage.sql
+        .exec<{ rid: string }>('SELECT rid FROM removes')
+        .toArray()
+      return rows.map((r) => r.rid)
+    } catch {
+      return []
+    }
   }
 
   private broadcast(msg: object) {

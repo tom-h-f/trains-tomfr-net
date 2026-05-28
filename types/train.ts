@@ -14,6 +14,6 @@ export interface TrainPosition {
 }
 
 export type WsMessage =
-  | { type: "snapshot"; trains: TrainPosition[] }
+  | { type: "snapshot"; trains: TrainPosition[]; removes?: string[] }
   | { type: "update"; train: TrainPosition }
   | { type: "remove"; rid: string };
