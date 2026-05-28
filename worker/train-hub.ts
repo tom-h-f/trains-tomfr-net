@@ -46,14 +46,21 @@ export class TrainHub extends DurableObject<Env> {
     if (request.headers.get('Upgrade') === 'websocket') {
       const pair = new WebSocketPair()
       const [client, server] = Object.values(pair) as [WebSocket, WebSocket]
-      this.ctx.acceptWebSocket(server)
-      server.send(
-        JSON.stringify({
-          type: 'snapshot',
-          trains: Array.from(this.trains.values()),
-          removes: this.getRemoves(),
-        })
-      )
+      
+      const isBridge = url.pathname === '/bridge-ingest'
+      const tag = isBridge ? 'bridge' : 'client'
+      
+      this.ctx.acceptWebSocket(server, [tag])
+      
+      if (!isBridge) {
+        server.send(
+          JSON.stringify({
+            type: 'snapshot',
+            trains: Array.from(this.trains.values()),
+            removes: this.getRemoves(),
+          })
+        )
+      }
       return new Response(null, { status: 101, webSocket: client })
     }
 
@@ -121,7 +128,42 @@ export class TrainHub extends DurableObject<Env> {
     return new Response('Not found', { status: 404 })
   }
 
-  webSocketMessage(_ws: WebSocket, _message: string | ArrayBuffer) {}
+  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
+    if (typeof message !== 'string') return
+    try {
+      const msg = JSON.parse(message)
+      if (msg.type === 'ingest') {
+        if (msg.secret !== this.env.INGEST_SECRET) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Unauthorized' }))
+          ws.close()
+          return
+        }
+
+        for (const train of msg.updates ?? []) {
+          this.trains.set(train.rid, train)
+          this.ctx.storage.sql.exec(
+            'INSERT OR REPLACE INTO trains (rid, data, updated_at) VALUES (?, ?, ?)',
+            train.rid,
+            JSON.stringify(train),
+            Date.now()
+          )
+          this.broadcast({ type: 'update', train })
+        }
+        for (const rid of msg.removes ?? []) {
+          this.trains.delete(rid)
+          this.ctx.storage.sql.exec('DELETE FROM trains WHERE rid = ?', rid)
+          this.ctx.storage.sql.exec(
+            'INSERT OR REPLACE INTO removes (rid, removed_at) VALUES (?, ?)',
+            rid,
+            Date.now()
+          )
+          this.broadcast({ type: 'remove', rid })
+        }
+      }
+    } catch (err) {
+      console.error('Failed to process WebSocket message:', err)
+    }
+  }
 
   webSocketClose(ws: WebSocket) {
     ws.close()
@@ -140,7 +182,7 @@ export class TrainHub extends DurableObject<Env> {
 
   private broadcast(msg: object) {
     const json = JSON.stringify(msg)
-    for (const ws of this.ctx.getWebSockets()) {
+    for (const ws of this.ctx.getWebSockets('client')) {
       try {
         ws.send(json)
       } catch {

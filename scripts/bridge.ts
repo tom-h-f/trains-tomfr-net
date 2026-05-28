@@ -4,6 +4,7 @@ import { TrainRegistry } from '../lib/services/train-registry'
 import { startDarwinConsumer } from '../lib/services/kafka-consumer'
 import { startTdConsumer } from '../lib/services/td-consumer'
 import type { TrainPosition } from '../types/train'
+import { WebSocket } from 'ws'
 
 const CF_HUB_URL = process.env.CF_HUB_URL
 const INGEST_SECRET = process.env.INGEST_SECRET
@@ -19,6 +20,45 @@ class BridgeStateService {
     removes: [],
   }
   private flushTimer: ReturnType<typeof setTimeout> | null = null
+  private ws: WebSocket | null = null
+  private wsReady = false
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+  constructor() {
+    this.connect()
+  }
+
+  private connect() {
+    const wsUrl = CF_HUB_URL!.replace(/^http/, 'ws') + '/bridge-ingest'
+    console.log('Connecting to ingest WebSocket:', wsUrl)
+    this.ws = new WebSocket(wsUrl)
+
+    this.ws.on('open', () => {
+      console.log('Ingest WebSocket connected')
+      this.wsReady = true
+      this.scheduleFlush()
+    })
+
+    this.ws.on('close', () => {
+      console.warn('Ingest WebSocket closed, reconnecting in 3s...')
+      this.wsReady = false
+      this.scheduleReconnect()
+    })
+
+    this.ws.on('error', (err) => {
+      console.error('Ingest WebSocket error:', err.message)
+      this.ws?.close()
+    })
+  }
+
+  private scheduleReconnect() {
+    if (!this.reconnectTimer) {
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null
+        this.connect()
+      }, 3000)
+    }
+  }
 
   updateTrain(position: TrainPosition) {
     this.pending.updates.push(position)
@@ -42,27 +82,30 @@ class BridgeStateService {
 
   private async flush() {
     this.flushTimer = null
+    if (!this.wsReady || !this.ws) {
+      return
+    }
     const batch = this.pending
     this.pending = { updates: [], removes: [] }
     if (!batch.updates.length && !batch.removes.length) return
 
     try {
-      const resp = await fetch(`${CF_HUB_URL}/ingest`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${INGEST_SECRET}`,
-        },
-        body: JSON.stringify(batch),
-      })
-      if (!resp.ok) {
-        console.warn(`Ingest failed: ${resp.status} ${await resp.text()}`)
-      }
+      this.ws.send(
+        JSON.stringify({
+          type: 'ingest',
+          secret: INGEST_SECRET,
+          updates: batch.updates,
+          removes: batch.removes,
+        })
+      )
     } catch (err) {
-      console.error('Ingest request error:', err)
+      console.error('Failed to send ingest batch:', err)
+      this.pending.updates.unshift(...batch.updates)
+      this.pending.removes.unshift(...batch.removes)
     }
   }
 }
+
 
 const berthRepo = new BerthRepository()
 const tiplocRepo = new TiplocRepository()
